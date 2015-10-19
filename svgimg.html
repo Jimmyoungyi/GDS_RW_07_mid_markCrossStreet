@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Ground Overlays</title>
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      #map {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script src="jq.js"></script>
+    <script>
+    //map data
+      var imageBounds = {
+	    north: 37.759014,
+	    south: 37.745746,
+	    east: -122.477195,
+	    west: -122.493977
+	  };
+    </script>
+    <script>
+    var data;
+    var dataArray;
+    var dataObject={};
+    var pointInt=0;
+    var pointObject=[];
+    var linepoint="";
+    var lccrosspoint=[];
+    var lccrosspointpath="";
+    var lccrosslinepath="";
+    $.ajax({
+	  	url: "part.svg"
+  	}).done(function(d) {
+	  	console.log(d);
+	  	data = $(d).children().children("path").attr("d")
+      data = data.substr(1);
+      data = data.substr(0, data.length-1); 
+      data = data.replace(/-/g, ",-");
+      dataArray = data.split("C");
+      // 大写字母loop
+      for(var i=0;i<dataArray.length;i++){
+        dataObject["pointlist"+i]=dataArray[i].split("c");
+        //线loop
+        for(var u=0;u<dataObject["pointlist"+i].length;u++){
+          var pointStore;
+          pointStore = dataObject["pointlist"+i][u].split(",");
+          if(!pointStore[0]){
+            pointStore.shift();
+          }
+          pointObject[pointInt] = [];
+          //点坐标loop
+          if(u==0){
+            for(var v=0;v<pointStore.length;v++){
+              pointObject[pointInt].push(Number(pointStore[v]));
+            }
+          }else{
+            for(var v=0;v<pointStore.length;v++){
+              if(v % 2 == 0){
+                pointObject[pointInt].push(Number(pointStore[v]) + pointObject[(pointInt - 1)][pointObject[(pointInt - 1)].length - 2]);
+              }else{
+                pointObject[pointInt].push(Number(pointStore[v]) + pointObject[(pointInt - 1)][pointObject[(pointInt - 1)].length - 1]);
+              }
+            }
+          }
+          pointInt++;
+        }
+      }
+      //check real point path
+      for(var i=0; i<pointObject.length;i++) { 
+          //<circle class="st2" cx="250" cy="250" r="2"/>
+         linepoint+='<circle class="st2" cx="'+pointObject[i][pointObject[i].length-2]+'" cy="'+pointObject[i][pointObject[i].length-1]+'" r="2"/>';
+         if(pointObject[i].length == 6){
+          linepoint+='<circle class="st3" cx="'+pointObject[i][pointObject[i].length-4]+'" cy="'+pointObject[i][pointObject[i].length-3]+'" r="2"/>';
+          linepoint+='<circle class="st3" cx="'+pointObject[i][pointObject[i].length-6]+'" cy="'+pointObject[i][pointObject[i].length-5]+'" r="2"/>';
+         }
+      }
+  	}).always(function(d){
+  		console.log("ajax",d);
+  	})
+    </script>
+    <script>
+    
+    </script>
+    <script>
+    // create road matrix to pix
+    var streetdata;
+    var streetpx={};
+    var streetpath="";
+    var crosspoint={};
+    var crosspath="";
+    $.ajax({
+    	url:"matrix.json"
+    }).always(function(d){
+    	//console.log("street run",d);
+    }).done(function(d){
+    	//console.log(d);
+    	streetdata=d;
+    	for(var key in streetdata){
+    		if(streetdata.hasOwnProperty(key)){
+    			streetpx[key]=[];
+    			for(var i = 0; i < streetdata[key].length;i++){
+    				var storepx=[];
+    				storepx.push((streetdata[key][i][0]-imageBounds.north)/(imageBounds.south-imageBounds.north)*500);
+    				storepx.push((streetdata[key][i][1]-imageBounds.west)/(imageBounds.east-imageBounds.west)*500);
+    				streetpx[key].push(storepx);
+    			}
+    		}
+    	}
+    	//<line x1="" y1="" x2="" y2=""/>
+    	//line
+    	for(var i = 0; i < streetpx.left.length; i++){
+    		streetpath += "<line class='st0' x1='" + streetpx.left[i][1] + "' y1='" + streetpx.left[i][0] + "' x2='" + streetpx.right[i][1] + "' y2='" + streetpx.right[i][0] + "'/>";
+    		//row
+    		crosspoint["l"+i]={}
+	    	for(var u = 0; u < streetpx.top.length; u++){
+	    		if(i == 0){
+	    			streetpath += "<line class='st0' x1='" + streetpx.top[u][1] + "' y1='" + streetpx.top[u][0] + "' x2='" + streetpx.bottom[u][1] + "' y2='" + streetpx.bottom[u][0] + "'/>";
+	    		}
+	    		var x1=streetpx.left[i][1];
+	    		var y1=streetpx.left[i][0];
+	    		var x2=streetpx.right[i][1];
+	    		var y2=streetpx.right[i][0];
+	    		var x3=streetpx.top[u][1];
+	    		var y3=streetpx.top[u][0];
+	    		var x4=streetpx.bottom[u][1];
+	    		var y4=streetpx.bottom[u][0];
+	    		var px = ((x1 - x2) * (x3 * y4 - x4 * y3) - (x3 - x4) * (x1 * y2 - x2 * y1)) / ((x3 - x4) * (y1 - y2) - (x1 - x2) * (y3 - y4));
+	    		var py = ((y1 - y2) * (x3 * y4 - x4 * y3) - (x1 * y2 - x2 * y1) * (y3 - y4)) / ((y1 - y2) * (x3 - x4) - (x1 - x2) * (y3 - y4));  
+	    		if(px<=Math.max(x1,x2) && px>=Math.min(x1,x2) && py<=Math.max(y1,y2) && py>=Math.min(y1,y2) && px<=Math.max(x3,x4) && px>=Math.min(x3,x4) && py<=Math.max(y3,y4) && py>=Math.min(y3,y4)){
+	    			crosspoint["l"+i]["p"+u]=[px,py];
+            //console.log(crosspath);
+	    			crosspath+='<circle class="st4" cx="'+ px +'" cy="'+ py +'" r="2"/>';
+            //line line cruve cross point
+	    			if(crosspoint["l"+i]["p"+(u-1)]){
+	    				// line curve cross loop
+	    				var lx=[crosspoint["l"+i]["p"+u][0],crosspoint["l"+i]["p"+(u-1)][0]];
+					    var ly=[crosspoint["l"+i]["p"+u][1],crosspoint["l"+i]["p"+(u-1)][1]];
+	    				for(var l=1;l<pointObject.length;l++) {
+	    					var lastpoint=pointObject[l-1];
+	    					var point = pointObject[l];
+    						var px=[lastpoint[lastpoint.length-2],point[0],point[2],point[4]];
+						    var py=[lastpoint[lastpoint.length-1],point[1],point[3],point[5]];
+						    //console.log(px,py,lx,ly)
+						    computeIntersections(px,py,lx,ly);
+        			}
+	    			}
+            //row line cruve cross point
+            if((crosspoint["l"+(i-1)] && crosspoint["l"+(i-1)]["p"+u])||(i==3 && u<8)){
+              // line curve cross loop
+              console.log(i,u)
+              if(i==3 && u<8){
+                console.log(crosspoint["l"+i]["p"+u]);
+                console.log(crosspoint["l"+(i-2)]["p"+(u)]);
+                var lx=[crosspoint["l"+i]["p"+u][0],crosspoint["l"+(i-2)]["p"+(u)][0]];
+                var ly=[crosspoint["l"+i]["p"+u][1],crosspoint["l"+(i-2)]["p"+(u)][1]];
+              }else{
+                var lx=[crosspoint["l"+i]["p"+u][0],crosspoint["l"+(i-1)]["p"+u][0]];
+                var ly=[crosspoint["l"+i]["p"+u][1],crosspoint["l"+(i-1)]["p"+u][1]];
+              }
+              for(var l=1;l<pointObject.length;l++) {
+                var lastpoint=pointObject[l-1];
+                var point = pointObject[l];
+                var px=[lastpoint[lastpoint.length-2],point[0],point[2],point[4]];
+                var py=[lastpoint[lastpoint.length-1],point[1],point[3],point[5]];
+                //console.log(px,py,lx,ly)
+                computeIntersections(px,py,lx,ly);
+              }
+            }
+	    		}
+	    		
+	    	}
+    	}
+    	for(var i=0;i<lccrosspoint.length;i++){
+    		lccrosspointpath+='<circle class="st5" cx="'+ lccrosspoint[i][0] +'" cy="'+ lccrosspoint[i][1] +'" r="2"/>';
+    	}
+	    	
+    })
+    </script>
+    <script>
+    // do math, the cross point
+    /* 
+     * Interactive SVG+Javascript demo that computes intersections 
+     * between a cubic bezier curve and a linear segment.
+     *
+     * For more info see:
+     * http://www.particleincell.com/blog/2013/cubic-line-intersection/ 
+     *
+     * You may freely use this algorithm in your codes however where feasible
+     * please include a link/reference to the source article
+     */ 
+    function computeIntersections(px,py,lx,ly)
+    {
+        var X=Array();
+        var A=ly[1]-ly[0];      //A=y2-y1
+        var B=lx[0]-lx[1];      //B=x1-x2
+        var C=lx[0]*(ly[0]-ly[1]) + 
+              ly[0]*(lx[1]-lx[0]);  //C=x1*(y1-y2)+y1*(x2-x1)
+        var bx = bezierCoeffs(px[0],px[1],px[2],px[3]);
+        var by = bezierCoeffs(py[0],py[1],py[2],py[3]);
+        var P = Array();
+        P[0] = A*bx[0]+B*by[0];   /*t^3*/
+        P[1] = A*bx[1]+B*by[1];   /*t^2*/
+        P[2] = A*bx[2]+B*by[2];   /*t*/
+        P[3] = A*bx[3]+B*by[3] + C; /*1*/
+        var r=cubicRoots(P);
+        /*verify the roots are in bounds of the linear segment*/  
+        for (var i=0;i<3;i++)
+        {
+            t=r[i];
+            X[0]=bx[0]*t*t*t+bx[1]*t*t+bx[2]*t+bx[3];
+            X[1]=by[0]*t*t*t+by[1]*t*t+by[2]*t+by[3];            
+            /*above is intersection point assuming infinitely long line segment,
+              make sure we are also in bounds of the line*/
+            var s;
+            if ((lx[1]-lx[0])!=0)           /*if not vertical line*/
+                s=(X[0]-lx[0])/(lx[1]-lx[0]);
+            else
+                s=(X[1]-ly[0])/(ly[1]-ly[0]);
+            /*in bounds?*/
+            if (t<0 || t>1.0 || s<0 || s>1.0)
+            {
+                X[0]=-100;  /*move off screen*/
+                X[1]=-100;
+            }
+            /*move intersection point*/
+            if(X[0]>0 && X[1]>0){
+	            lccrosspoint.push([X[0],X[1]]);
+              lccrosslinepath+="<line class='st6' x1='"+lx[0]+"' y1='"+ly[0]+"' x2='"+lx[1]+"' y2='"+ly[1]+"'/>"
+            }
+        }    
+    }
+    /*based on http://mysite.verizon.net/res148h4j/javascript/script_exact_cubic.html#the%20source%20code*/
+    function cubicRoots(P)
+    {
+      var a=P[0];
+      var b=P[1];
+      var c=P[2];
+      var d=P[3];
+      var A=b/a;
+      var B=c/a;
+      var C=d/a;
+        var Q, R, D, S, T, Im;
+        var Q = (3*B - Math.pow(A, 2))/9;
+        var R = (9*A*B - 27*C - 2*Math.pow(A, 3))/54;
+        var D = Math.pow(Q, 3) + Math.pow(R, 2);    // polynomial discriminant
+        var t=Array();
+        if (D >= 0)                                 // complex or duplicate roots
+        {
+            var S = sgn(R + Math.sqrt(D))*Math.pow(Math.abs(R + Math.sqrt(D)),(1/3));
+            var T = sgn(R - Math.sqrt(D))*Math.pow(Math.abs(R - Math.sqrt(D)),(1/3));
+            t[0] = -A/3 + (S + T);                    // real root
+            t[1] = -A/3 - (S + T)/2;                  // real part of complex root
+            t[2] = -A/3 - (S + T)/2;                  // real part of complex root
+            Im = Math.abs(Math.sqrt(3)*(S - T)/2);    // complex part of root pair   
+            /*discard complex roots*/
+            if (Im!=0)
+            {
+                t[1]=-1;
+                t[2]=-1;
+            }
+        }
+        else                                          // distinct real roots
+        {
+            var th = Math.acos(R/Math.sqrt(-Math.pow(Q, 3)));
+            t[0] = 2*Math.sqrt(-Q)*Math.cos(th/3) - A/3;
+            t[1] = 2*Math.sqrt(-Q)*Math.cos((th + 2*Math.PI)/3) - A/3;
+            t[2] = 2*Math.sqrt(-Q)*Math.cos((th + 4*Math.PI)/3) - A/3;
+            Im = 0.0;
+        }
+        /*discard out of spec roots*/
+      for (var i=0;i<3;i++) 
+            if (t[i]<0 || t[i]>1.0) t[i]=-1;           
+      /*sort but place -1 at the end*/
+        t=sortSpecial(t);
+      //console.log(t[0]+" "+t[1]+" "+t[2]);
+        return t;
+    }
+    function sortSpecial(a)
+    {
+        var flip;
+        var temp;
+        
+        do {
+            flip=false;
+            for (var i=0;i<a.length-1;i++)
+            {
+                if ((a[i+1]>=0 && a[i]>a[i+1]) ||
+                    (a[i]<0 && a[i+1]>=0))
+                {
+                    flip=true;
+                    temp=a[i];
+                    a[i]=a[i+1];
+                    a[i+1]=temp;
+                    
+                }
+            }
+        } while (flip);
+      return a;
+    }
+    function bezierCoeffs(P0,P1,P2,P3)
+    {
+      var Z = Array();
+      Z[0] = -P0 + 3*P1 + -3*P2 + P3; 
+        Z[1] = 3*P0 - 6*P1 + 3*P2;
+        Z[2] = -3*P0 + 3*P1;
+        Z[3] = P0;
+      return Z;
+    }
+    // sign of number
+	function sgn( x )
+	{
+	    if (x < 0.0) return -1;
+	    return 1;
+	}
+
+	function bezierCoeffs(P0,P1,P2,P3)
+	{
+		var Z = Array();
+		Z[0] = -P0 + 3*P1 + -3*P2 + P3; 
+	    Z[1] = 3*P0 - 6*P1 + 3*P2;
+	    Z[2] = -3*P0 + 3*P1;
+	    Z[3] = P0;
+		return Z;
+	}
+    //do loop
+
+    // var px=[204.30000000000007,215.70000000000007,238.70000000000007,272.70000000000005];
+    // var py=[143.39999999999998,111.09999999999998,89.79999999999998,80.69999999999997];
+    // var lx=[-24.579907043432293,486.0564890951034];
+    // var ly=[139.28248417232882,110.67983117282388];
+    // computeIntersections(px,py,lx,ly);
+    </script>
+    <script>
+    // This example uses a GroundOverlay to place an image on the map
+    // showing an antique map of Newark, NJ.
+
+    var historicalOverlay;
+    var outline;
+    var streetline;
+    var map;
+    function initMap() {
+      map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 15,
+        center: {lat: 37.753789, lng: -122.486245}
+      });
+
+      historicalOverlay = new google.maps.GroundOverlay(
+        'part.svg',
+        imageBounds);
+      historicalOverlay.setMap(map);
+      outline = new google.maps.GroundOverlay(
+        'partline.svg',
+        imageBounds);
+      //outline.setMap(map);
+      streetline = new google.maps.GroundOverlay(
+        'streetline.svg',
+        imageBounds);
+      streetline.setMap(map);
+    }
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBdZW6nLZhnv1Elzui4z5gh61eHFNzQwCo&callback=initMap&signed_in=true" async defer>
+    </script>
+  </body>
+</html>
